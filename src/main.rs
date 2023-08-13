@@ -18,6 +18,9 @@ async fn main() -> anyhow::Result<()> {
     const MAX_CONNECTIONS : u32 = 10;
     const DATABASE_URL : &str = "postgres://user:password@db/db";
 
+    std::env::set_var("RUST_LOG", "debug");
+    print!("Creating Pg pool...");
+
     let db = PgPoolOptions::new()
         .max_connections(MAX_CONNECTIONS)
         .connect(&DATABASE_URL)
@@ -28,6 +31,7 @@ async fn main() -> anyhow::Result<()> {
     .route("/pessoas", post(post_pessoas).get(get_pessoas_busca))
     .route("/pessoas/:id", get(get_pessoas_id))
     .route("/contagem-pessoas", get(contagem_pessoas))
+    .route("/health", get(health_check))
     .layer(Extension(db));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 1234));
@@ -36,6 +40,19 @@ async fn main() -> anyhow::Result<()> {
     .serve(app.into_make_service())
     .await
     .context("Server failed")
+}
+
+async fn health_check(Extension(db): Extension<PgPool>) -> Response {
+    let result = sqlx::query("SELECT 1");
+    let result = result.fetch_one(&db).await;
+
+    // Return what is wrong with the database
+    match result {
+        Ok(_) => (),
+        Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"message": err.to_string()}))).into_response()
+    };
+
+    (StatusCode::OK, Json(json!({"status": "ok"}))).into_response()
 }
 
 /* Handlers */
@@ -76,7 +93,7 @@ async fn post_pessoas(
 
     match result {
         Ok(_) => return (StatusCode::CREATED, Json(json!({"message": "created"}))).into_response(),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"message": "internal server error"}))).into_response()
+        Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": err.to_string()}))).into_response()
     };
 }
 
@@ -92,7 +109,7 @@ async fn get_pessoas_id(
     match result {
         Ok(Some(pessoa)) => return (StatusCode::OK, Json(json!({"pessoa": Pessoa::from_pg_row(pessoa)}))).into_response(),
         Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"message": "not found"}))).into_response(),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"message": "internal server error"}))).into_response()
+        Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": err.to_string()}))).into_response()
     };
 }
 
@@ -103,13 +120,13 @@ async fn get_pessoas_busca() -> Response {
 async fn contagem_pessoas(
     Extension(db): Extension<PgPool>
 ) -> Response {
-    let result : Result<i32, sqlx::Error> = sqlx::query_scalar("SELECT COUNT(*) FROM pessoas")
+    let result = sqlx::query("SELECT COUNT(*) FROM pessoas")
     .fetch_one(&db)
     .await;
 
     match result {
-        Ok(count) => return (StatusCode::OK, Json(json!({"count": count}))).into_response(),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"message": "internal server error"}))).into_response()
+        Ok(row) => return (StatusCode::OK, Json(json!({"count": row.get::<i64, usize>(0)}))).into_response(),
+        Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": err.to_string()}))).into_response()
     };
 }
 
