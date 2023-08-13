@@ -28,8 +28,7 @@ async fn main() -> anyhow::Result<()> {
     .route("/contagem-pessoas", get(contagem_pessoas))
     .with_state(Extension(db));
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 9999));
-    print!("Listening on {}", addr);
+    let addr = SocketAddr::from(([0, 0, 0, 0], 1234));
 
     axum::Server::bind(&addr)
     .serve(app.into_make_service())

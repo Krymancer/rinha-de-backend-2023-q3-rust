@@ -7,8 +7,8 @@ services:
     hostname: api
     depends_on:
       - db
-    expose:
-      - 9999
+    ports:
+      - "9999:1234"
     deploy:
       resources:
         limits:
