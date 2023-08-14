@@ -3,8 +3,8 @@ use axum::{
     Router, 
     routing::{post, get}, 
     response::{Response, IntoResponse, Json}, 
-    http::StatusCode,
-    extract::Path,
+    http::{StatusCode, HeaderMap},
+    extract::{Path, Query},
     Extension
 };
 use serde::{Serialize, Deserialize};
@@ -66,13 +66,15 @@ async fn post_pessoas(
 
     let date = match date {
         Ok(date) => date,
-        Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({"message": "invalid date"}))).into_response()
+        Err(err) => return (StatusCode::BAD_REQUEST, Json(json!({"error": err.to_string()}))).into_response()
     };
 
     let stack = match payload.stack {
         Some(stack) => stack,
         None => vec![]
     };
+
+    let stack =  stack.into_iter().map(|s| s.to_lowercase()).collect::<Vec<_>>().join(",");
 
     let pessoa = Pessoa {
         id: uuid,
@@ -82,7 +84,7 @@ async fn post_pessoas(
         stack
     };
 
-    let result = sqlx::query("INSERT INTO pessoas (id, apelido, nome, nasciment, stack")
+    let result = sqlx::query("INSERT INTO pessoas (id, apelido, nome, nascimento, stack) VALUES ($1, $2, $3, $4, $5)")
     .bind(&pessoa.id)
     .bind(&pessoa.apelido)
     .bind(&pessoa.nome)
@@ -92,7 +94,11 @@ async fn post_pessoas(
     .await;
 
     match result {
-        Ok(_) => return (StatusCode::CREATED, Json(json!({"message": "created"}))).into_response(),
+        Ok(_) => {
+            let mut headers = HeaderMap::new();
+            headers.insert("Location", format!("/pessoas/{}", pessoa.id).parse().unwrap());
+            return (StatusCode::CREATED, headers, Json(json!(pessoa))).into_response();
+        },
         Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": err.to_string()}))).into_response()
     };
 }
@@ -113,8 +119,24 @@ async fn get_pessoas_id(
     };
 }
 
-async fn get_pessoas_busca() -> Response {
-    (StatusCode::OK, Json(json!({"message": "ok"}))).into_response()
+async fn get_pessoas_busca(
+    Extension(db): Extension<PgPool>,
+    Query(query): Query<QueryPessoa>
+) -> Response {
+    let search_term  = query.t;
+    
+    let result = sqlx::query("SELECT id, apelido FROM PESSOAS
+    WHERE BUSCA @@ plainto_tsquery('busca', '$1') LIMIT 50;")
+    .bind(search_term)
+    .fetch_all(&db)
+    .await;
+
+    let pessoas = match result {
+        Ok(pessoas) => pessoas.into_iter().map(|p| Pessoa::from_pg_row(p)).collect::<Vec<_>>(),
+        Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": err.to_string()}))).into_response()
+    };
+
+    (StatusCode::OK, Json(json!(pessoas))).into_response()
 }
 
 async fn contagem_pessoas(
@@ -137,7 +159,7 @@ struct Pessoa {
     apelido: String,
     nome: String,
     nascimento: String,
-    stack: Vec<String>
+    stack: String
 }
 
 #[derive (Debug, Serialize, Deserialize )]
@@ -146,6 +168,11 @@ struct CreatePessoa {
     nome: String,
     nascimento: String,
     stack: Option<Vec<String>>
+}
+
+#[derive (Debug, Serialize, Deserialize )]
+struct QueryPessoa {
+    t: String
 }
 
 
