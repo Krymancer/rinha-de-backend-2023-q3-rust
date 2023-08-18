@@ -2,9 +2,9 @@ use std::net::SocketAddr;
 use axum::{
     Router, 
     routing::{post, get}, 
-    response::{Response, IntoResponse, Json}, 
-    http::{StatusCode, HeaderMap},
-    extract::{Path, Query},
+    response::{IntoResponse, Response}, 
+    http::{StatusCode, header},
+    extract::{Path, Query, Json},
     Extension
 };
 use serde::{Serialize, Deserialize};
@@ -15,7 +15,7 @@ use chrono::NaiveDate;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    const MAX_CONNECTIONS : u32 = 10;
+    const MAX_CONNECTIONS : u32 = 50;
     const DATABASE_URL : &str = "postgres://user:password@db/db";
 
     std::env::set_var("RUST_LOG", "debug");
@@ -31,7 +31,6 @@ async fn main() -> anyhow::Result<()> {
     .route("/pessoas", post(post_pessoas).get(get_pessoas_busca))
     .route("/pessoas/:id", get(get_pessoas_id))
     .route("/contagem-pessoas", get(contagem_pessoas))
-    .route("/health", get(health_check))
     .layer(Extension(db));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 1234));
@@ -40,19 +39,6 @@ async fn main() -> anyhow::Result<()> {
     .serve(app.into_make_service())
     .await
     .context("Server failed")
-}
-
-async fn health_check(Extension(db): Extension<PgPool>) -> Response {
-    let result = sqlx::query("SELECT 1");
-    let result = result.fetch_one(&db).await;
-
-    // Return what is wrong with the database
-    match result {
-        Ok(_) => (),
-        Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"message": err.to_string()}))).into_response()
-    };
-
-    (StatusCode::OK, Json(json!({"status": "ok"}))).into_response()
 }
 
 /* Handlers */
@@ -66,7 +52,7 @@ async fn post_pessoas(
 
     let date = match date {
         Ok(date) => date,
-        Err(err) => return (StatusCode::BAD_REQUEST, Json(json!({"error": err.to_string()}))).into_response()
+        Err(_) => return (StatusCode::UNPROCESSABLE_ENTITY).into_response()
     };
 
     let stack = match payload.stack {
@@ -94,13 +80,10 @@ async fn post_pessoas(
     .await;
 
     match result {
-        Ok(_) => {
-            let mut headers = HeaderMap::new();
-            headers.insert("Location", format!("/pessoas/{}", pessoa.id).parse().unwrap());
-            return (StatusCode::CREATED, headers, Json(json!(pessoa))).into_response();
-        },
-        Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": err.to_string()}))).into_response()
-    };
+        Ok(_) => (StatusCode::CREATED, [(header::LOCATION, format!("/pessoas/{}", pessoa.id))]).into_response(),
+        Err(sqlx::Error::Database(_)) => (StatusCode::UNPROCESSABLE_ENTITY).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR).into_response()
+    }
 }
 
 async fn get_pessoas_id(
@@ -114,8 +97,8 @@ async fn get_pessoas_id(
 
     match result {
         Ok(Some(pessoa)) => return (StatusCode::OK, Json(json!({"pessoa": Pessoa::from_pg_row(pessoa)}))).into_response(),
-        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"message": "not found"}))).into_response(),
-        Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": err.to_string()}))).into_response()
+        Ok(None) => return (StatusCode::NOT_FOUND).into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR).into_response()
     };
 }
 
@@ -132,8 +115,8 @@ async fn get_pessoas_busca(
     .await;
 
     let pessoas = match result {
-        Ok(pessoas) => pessoas.into_iter().map(|p| Pessoa::from_pg_row(p)).collect::<Vec<_>>(),
-        Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": err.to_string()}))).into_response()
+        Ok(pessoas) => pessoas.into_iter().map(|p| PessoaResponse::from_pg_row(p)).collect::<Vec<_>>(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR).into_response()
     };
 
     (StatusCode::OK, Json(json!(pessoas))).into_response()
@@ -148,7 +131,7 @@ async fn contagem_pessoas(
 
     match result {
         Ok(row) => return (StatusCode::OK, Json(json!({"count": row.get::<i64, usize>(0)}))).into_response(),
-        Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": err.to_string()}))).into_response()
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR).into_response()
     };
 }
 
@@ -160,6 +143,15 @@ struct Pessoa {
     nome: String,
     nascimento: String,
     stack: String
+}
+
+#[derive (Debug, Serialize, Deserialize )]
+struct PessoaResponse {
+    id: String,
+    apelido: String,
+    nome: String,
+    nascimento: String,
+    stack: Option<Vec<String>>
 }
 
 #[derive (Debug, Serialize, Deserialize )]
@@ -175,6 +167,24 @@ struct QueryPessoa {
     t: String
 }
 
+impl PessoaResponse {
+    fn from_pg_row(row: sqlx::postgres::PgRow) -> Self {
+        let stack_list: Option<String> = row.get(4);
+
+        let stack = match  stack_list {
+            Some(stack) => Some(stack.split(',').map(|s| s.to_string()).collect::<Vec<String>>()),
+            None => None
+        };
+
+        Self {
+            id: row.get(0),
+            apelido: row.get(1),
+            nome: row.get(2),
+            nascimento: row.get(3),
+            stack: stack
+        }
+    }
+}
 
 impl Pessoa {
     fn from_pg_row(row: sqlx::postgres::PgRow) -> Self {
