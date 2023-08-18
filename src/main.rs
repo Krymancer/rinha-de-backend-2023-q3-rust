@@ -109,8 +109,8 @@ async fn get_pessoas_busca(
     let search_term  = query.t;
     
     let result = sqlx::query("SELECT id, apelido FROM PESSOAS
-    WHERE BUSCA @@ plainto_tsquery('busca', '$1') LIMIT 50;")
-    .bind(search_term)
+    WHERE BUSCA ILIKE $1 LIMIT 50;")
+    .bind(format!("%{search_term}"))
     .fetch_all(&db)
     .await;
 

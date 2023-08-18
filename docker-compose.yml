@@ -26,6 +26,7 @@ services:
           memory: '0.5GB'
   db:
     image: postgres
+    hostname: db
     environment:
       POSTGRES_PASSWORD: password
       POSTGRES_USER: user
