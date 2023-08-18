@@ -33,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
     .route("/contagem-pessoas", get(contagem_pessoas))
     .layer(Extension(db));
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 1234));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 80));
 
     axum::Server::bind(&addr)
     .serve(app.into_make_service())
