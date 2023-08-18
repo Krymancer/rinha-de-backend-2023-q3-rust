@@ -5,7 +5,7 @@ services:
     hostname: api1
     depends_on:
       - db
-    exposes:
+    expose:
       - "80"
     deploy:
       resources:
@@ -17,7 +17,7 @@ services:
     hostname: api2
     depends_on:
       - db
-    exposes:
+    expose:
       - "80"
     deploy:
       resources:
