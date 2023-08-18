@@ -1,9 +1,7 @@
 version: '3.5'
 services:
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: krymancer/rinha-de-backend-2023-q3-rust
     hostname: api
     depends_on:
       - db
