@@ -2,6 +2,7 @@ FROM rust:latest AS build
 WORKDIR /usr/src/app
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
+COPY .sqlx ./.sqlx
 RUN cargo build --release
 RUN cargo install --path .
 FROM debian:bullseye-slim

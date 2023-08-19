@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO pessoa (id, apelido, nome, nascimento, stack) VALUES ($1, $2, $3, $4, $5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Bpchar",
+        "VarcharArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8f11e94d3f1b5852230a1bc0f4398a5d4c784fe30505c52fae024892a4813979"
+}

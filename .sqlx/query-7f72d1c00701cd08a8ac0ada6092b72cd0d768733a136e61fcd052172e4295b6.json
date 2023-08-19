@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, apelido, nome, nascimento, stack FROM pessoa WHERE search ILIKE $1 LIMIT 50;",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "apelido",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "nome",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "nascimento",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "stack",
+        "type_info": "VarcharArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "7f72d1c00701cd08a8ac0ada6092b72cd0d768733a136e61fcd052172e4295b6"
+}
