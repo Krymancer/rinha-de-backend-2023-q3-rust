@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    const MAX_CONNECTIONS: u32 = 69;
+    const MAX_CONNECTIONS: u32 = 8192; // Yeah I know
     const DATABASE_URL: &str = "postgres://user:password@db/db";
 
     let db = PgPoolOptions::new()
