@@ -1,6 +1,6 @@
 version: '3.5'
 services:
-  api1:
+  api1: &api
     image: krymancer/rinha-de-backend-2023-q3-rust
     hostname: api1
     depends_on:
@@ -13,7 +13,7 @@ services:
           cpus: '0.25'
           memory: '0.5GB'
   api2:
-    <<: *api1
+    <<: *api
   db:
     image: postgres
     hostname: db
