@@ -8,6 +8,6 @@ services:
         POSTGRES_USER: user
         POSTGRES_DB: db
       volumes:
-        - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+        - ./conf/postgres/:/docker-entrypoint-initdb.d/
       ports:
-        - 5432:5432
+        - 5431:5432
